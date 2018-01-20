@@ -102,12 +102,12 @@ type l2Update struct {
 	Changes   [][]string `json:"changes"`
 }
 
-type snapshot struct {
-	ProductID string     `json:"product_id"`
-	Type      string     `json:"type"`
-	Bids      [][]string `json:"bids"`
-	Asks      [][]string `json:"asks"`
-}
+// type snapshot struct {
+// 	ProductID string     `json:"product_id"`
+// 	Type      string     `json:"type"`
+// 	Bids      [][]string `json:"bids"`
+// 	Asks      [][]string `json:"asks"`
+// }
 
 func parseMessage(bb []byte) (Message, error) {
 	mt, err := messageType(bb)

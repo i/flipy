@@ -18,8 +18,17 @@ func main() {
 		log.Fatalf("error getting messages from feed: %v", err)
 	}
 
+	book, err := NewBook()
+	if err != nil {
+		log.Fatalf("error creating book: %v", err)
+	}
+
 	for m := range ch {
 		fmt.Printf("%s: %v\n", m.MessageType(), m)
+
+		switch m.MessageType() {
+		case Snapshot:
+		}
 	}
 
 	// 	select {}
