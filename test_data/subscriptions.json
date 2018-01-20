@@ -1,0 +1,17 @@
+{
+  "type": "subscriptions",
+  "channels": [
+    {
+      "name": "heartbeat",
+      "product_ids": [
+        "BCH-USD"
+      ]
+    },
+    {
+      "name": "level2",
+      "product_ids": [
+        "BCH-USD"
+      ]
+    }
+  ]
+}
