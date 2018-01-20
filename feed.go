@@ -95,20 +95,6 @@ func messageType(bb []byte) (MessageType, error) {
 	return t.Type, json.Unmarshal(bb, t)
 }
 
-type l2Update struct {
-	Type      string     `json:"type"`
-	ProductID string     `json:"product_id"`
-	Time      time.Time  `json:"time"`
-	Changes   [][]string `json:"changes"`
-}
-
-// type snapshot struct {
-// 	ProductID string     `json:"product_id"`
-// 	Type      string     `json:"type"`
-// 	Bids      [][]string `json:"bids"`
-// 	Asks      [][]string `json:"asks"`
-// }
-
 func parseMessage(bb []byte) (Message, error) {
 	mt, err := messageType(bb)
 	if err != nil {

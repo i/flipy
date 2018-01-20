@@ -2,6 +2,15 @@ package main
 
 import "container/heap"
 
+/*
+sell 5.30
+sell 5.22
+sell 5.20 <- min sell/ask
+=========
+buy  5.14 <- max buy/bid
+buy  5.10
+buy  5.00
+*/
 type Book struct {
 	asks *bookEntryHeap
 	bids *bookEntryHeap
@@ -14,15 +23,14 @@ func NewBook() (*Book, error) {
 	}
 	heap.Init(book.asks)
 	heap.Init(book.bids)
-
 	return book, nil
 }
 
 func (b *Book) update(e bookEntry) {
-	if e.Side == Sell {
-		heap.Push(b.asks, e)
-	} else {
+	if e.Side == Buy {
 		heap.Push(b.bids, e)
+	} else {
+		heap.Push(b.asks, e)
 	}
 }
 
@@ -32,11 +40,13 @@ type bookEntry struct {
 	Size  float64
 }
 
-func (b bookEntry) priority() int64 {
-	if b.Side == Sell {
-		return b.Price.Int64()
+// low sells > high sells
+// high buys > low buys
+func (e bookEntry) priority() int64 {
+	if e.Side == Sell {
+		return -e.Price.Int64()
 	}
-	return -b.Price.Int64()
+	return e.Price.Int64()
 }
 
 type bookEntryHeap []bookEntry
