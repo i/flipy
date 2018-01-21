@@ -23,15 +23,7 @@ func main() {
 		log.Fatalf("error creating book: %v", err)
 	}
 
-	var i int
 	for m := range ch {
-		i++
-		if i > 10 {
-			break
-		}
-
-		fmt.Printf("%s: %v\n", m.MessageType(), m)
-
 		switch msg := m.(type) {
 		case SnapshotMessage:
 			for _, ask := range msg.Asks {
@@ -48,19 +40,9 @@ func main() {
 				book.update(bid)
 			}
 		}
+		spread, _ := book.Spread()
+		fmt.Println("spread:", spread)
 	}
-
-	fmt.Println(book)
-
-	bid := book.bids.Peek()
-	ask := book.asks.Peek()
-
-	spread := ask.Price.Minus(bid.Price)
-
-	fmt.Printf("lowest  ask: %v\n", ask)
-	fmt.Printf("highest bid: %v\n", bid)
-
-	fmt.Printf("spread: %v\n", spread)
 
 	// 	select {}
 }

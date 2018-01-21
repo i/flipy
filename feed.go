@@ -117,8 +117,8 @@ func parseMessage(bb []byte) (Message, error) {
 
 type SnapshotMessage struct {
 	ProductID ProductID
-	Bids      []bookEntry
-	Asks      []bookEntry
+	Bids      []*bookEntry
+	Asks      []*bookEntry
 }
 
 func (s SnapshotMessage) MessageType() MessageType {
@@ -128,8 +128,8 @@ func (s SnapshotMessage) MessageType() MessageType {
 // dry this later
 type L2UpdateMessage struct {
 	ProductID ProductID
-	Bids      []bookEntry
-	Asks      []bookEntry
+	Bids      []*bookEntry
+	Asks      []*bookEntry
 }
 
 func (s L2UpdateMessage) MessageType() MessageType {
@@ -164,8 +164,8 @@ func parseSnapshot(bb []byte) (SnapshotMessage, error) {
 
 	msg := SnapshotMessage{
 		ProductID: p.ProductID,
-		Asks:      make([]bookEntry, 0, len(p.Asks)),
-		Bids:      make([]bookEntry, 0, len(p.Bids)),
+		Asks:      make([]*bookEntry, 0, len(p.Asks)),
+		Bids:      make([]*bookEntry, 0, len(p.Bids)),
 	}
 
 	for _, dd := range p.Asks {
@@ -187,18 +187,18 @@ func parseSnapshot(bb []byte) (SnapshotMessage, error) {
 	return msg, nil
 }
 
-func parseSnapshotBookEntry(side Side, data []string) (bookEntry, error) {
+func parseSnapshotBookEntry(side Side, data []string) (*bookEntry, error) {
 	price, err := MoneyFromString(data[0])
 	if err != nil {
-		return bookEntry{}, fmt.Errorf("error parsing price: %v\ndata: %v", err, data)
+		return nil, fmt.Errorf("error parsing price: %v\ndata: %v", err, data)
 	}
 
 	size, err := strconv.ParseFloat(data[1], 64)
 	if err != nil {
-		return bookEntry{}, err
+		return nil, err
 	}
 
-	return bookEntry{
+	return &bookEntry{
 		Side:  side,
 		Price: price,
 		Size:  size,
@@ -218,8 +218,8 @@ func parseL2Update(bb []byte) (L2UpdateMessage, error) {
 
 	msg := L2UpdateMessage{
 		ProductID: p.ProductID,
-		Bids:      make([]bookEntry, 0, 1),
-		Asks:      make([]bookEntry, 0, 1),
+		Bids:      make([]*bookEntry, 0, 1),
+		Asks:      make([]*bookEntry, 0, 1),
 	}
 
 	for _, c := range p.Changes {
@@ -240,21 +240,21 @@ func parseL2Update(bb []byte) (L2UpdateMessage, error) {
 	return msg, nil
 }
 
-func parseL2BookEntry(data []string) (bookEntry, error) {
+func parseL2BookEntry(data []string) (*bookEntry, error) {
 	side, err := parseSide(data[0])
 	if err != nil {
-		return bookEntry{}, err
+		return nil, err
 	}
 	price, err := MoneyFromString(data[1])
 	if err != nil {
-		return bookEntry{}, err
+		return nil, err
 	}
 	size, err := strconv.ParseFloat(data[2], 64)
 	if err != nil {
-		return bookEntry{}, err
+		return nil, err
 	}
 
-	return bookEntry{
+	return &bookEntry{
 		Side:  side,
 		Price: price,
 		Size:  size,

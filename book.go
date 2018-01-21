@@ -1,6 +1,9 @@
 package main
 
-import "container/heap"
+import (
+	"container/heap"
+	"fmt"
+)
 
 /*
 sell 5.30
@@ -12,26 +15,57 @@ buy  5.10
 buy  5.00
 */
 type Book struct {
-	asks *bookEntryHeap
-	bids *bookEntryHeap
+	askHeap *bookEntryHeap
+	askMap  map[Money]*bookEntry
+
+	bidHeap *bookEntryHeap
+	bidMap  map[Money]*bookEntry
 }
 
 func NewBook() (*Book, error) {
 	book := &Book{
-		asks: &bookEntryHeap{},
-		bids: &bookEntryHeap{},
+		askHeap: &bookEntryHeap{},
+		askMap:  make(map[Money]*bookEntry),
+		bidHeap: &bookEntryHeap{},
+		bidMap:  make(map[Money]*bookEntry),
 	}
-	heap.Init(book.asks)
-	heap.Init(book.bids)
+	heap.Init(book.askHeap)
+	heap.Init(book.bidHeap)
 	return book, nil
 }
 
-func (b *Book) update(e bookEntry) {
+// removals can only happen when popping or peeking
+func (b *Book) update(e *bookEntry) {
+	var m map[Money]*bookEntry
+	var h *bookEntryHeap
+
 	if e.Side == Buy {
-		heap.Push(b.bids, e)
+		m = b.bidMap
+		h = b.bidHeap
 	} else {
-		heap.Push(b.asks, e)
+		m = b.askMap
+		h = b.askHeap
 	}
+
+	if existing, ok := m[e.Price]; ok {
+		existing.Size = e.Size
+		return
+	}
+
+	m[e.Price] = e
+	h.Push(e)
+}
+
+func (b *Book) Spread() (Money, error) {
+	ask, ok := b.askHeap.Peek()
+	if !ok {
+		return Money{}, fmt.Errorf("todo")
+	}
+	bid, ok := b.bidHeap.Peek()
+	if !ok {
+		return Money{}, fmt.Errorf("todo")
+	}
+	return ask.Price.Minus(bid.Price), nil
 }
 
 type bookEntry struct {
@@ -44,20 +78,29 @@ type bookEntry struct {
 // high buys > low buys
 func (e bookEntry) priority() int64 {
 	if e.Side == Sell {
-		return -e.Price.Int64()
+		return e.Price.Int64()
 	}
-	return e.Price.Int64()
+	return -e.Price.Int64()
 }
 
-type bookEntryHeap []bookEntry
+type bookEntryHeap []*bookEntry
 
 func (h bookEntryHeap) Len() int           { return len(h) }
 func (h bookEntryHeap) Less(i, j int) bool { return h[i].priority() < h[j].priority() }
 func (h bookEntryHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
-func (h bookEntryHeap) Peek() bookEntry    { return h[len(h)-1] }
+
+func (h *bookEntryHeap) Peek() (*bookEntry, bool) {
+	for h.Len() > 0 {
+		if (*h)[0].Size > 0 {
+			return (*h)[0], true
+		}
+		h.Pop()
+	}
+	return nil, false
+}
 
 func (h *bookEntryHeap) Push(x interface{}) {
-	entry := x.(bookEntry)
+	entry := x.(*bookEntry)
 	*h = append(*h, entry)
 }
 
