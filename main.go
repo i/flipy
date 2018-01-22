@@ -23,6 +23,7 @@ func main() {
 		log.Fatalf("error creating book: %v", err)
 	}
 
+	var i int
 	for m := range ch {
 		switch msg := m.(type) {
 		case SnapshotMessage:
@@ -42,6 +43,17 @@ func main() {
 		}
 		spread, _ := book.Spread()
 		fmt.Println("spread:", spread)
+		fmt.Println("size:", book.Size())
+
+		i++
+		if i > 25 {
+			break
+		}
+	}
+
+	b := book.Dump()
+	for _, e := range b {
+		fmt.Println(e)
 	}
 
 	// 	select {}

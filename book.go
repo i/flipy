@@ -35,6 +35,24 @@ func newHeapMap() *heapMap {
 	return hm
 }
 
+func (b *Book) Dump() []*bookEntry {
+	var ret []*bookEntry
+
+	for {
+		fmt.Println("ok...")
+		if _, ok := b.asks.peek(); !ok {
+			break
+		}
+		ret = append(ret, b.asks.Pop().(*bookEntry))
+	}
+
+	return ret
+}
+
+func (b *Book) Size() int {
+	return b.bids.Len() + b.asks.Len()
+}
+
 // removals can only happen when popping or peeking
 func (b *Book) update(e *bookEntry) {
 	var hm *heapMap
@@ -48,15 +66,16 @@ func (b *Book) update(e *bookEntry) {
 
 // TODO needs fixing
 func (b *Book) Spread() (Money, error) {
-	// ask, ok := b.askHeap.Peek()
-	// if !ok {
-	// 	return Money{}, fmt.Errorf("todo")
-	// }
-	// bid, ok := b.bidHeap.Peek()
-	// if !ok {
-	// 	return Money{}, fmt.Errorf("todo")
-	// }
-	// return ask.Price.Minus(bid.Price), nil
+	ask, ok := b.asks.peek()
+	if !ok {
+		return Money{}, fmt.Errorf("todo")
+	}
+	bid, ok := b.bids.peek()
+	if !ok {
+		return Money{}, fmt.Errorf("todo")
+	}
+	return ask.Price.Minus(bid.Price), nil
+
 	return Money{}, nil
 }
 
@@ -84,42 +103,46 @@ func (hm heapMap) Len() int           { return len(hm.h) }
 func (hm heapMap) Less(i, j int) bool { return hm.h[i].priority() < hm.h[j].priority() }
 func (hm heapMap) Swap(i, j int)      { hm.h[i], hm.h[j] = hm.h[j], hm.h[i] }
 
-func (hm *heapMap) Peek() (*bookEntry, bool) {
+func (hm *heapMap) peek() (*bookEntry, bool) {
+	debug("peeking")
 	for hm.Len() > 0 {
 		if hm.h[0].Size == 0 {
 			hm.Pop()
 		} else {
-			return (*h)[0], true
+			return (hm.h)[0], true
 		}
 	}
 	return nil, false
 }
 
-func (h *heapMap) Push(x interface{}) {
+func (hm *heapMap) Push(x interface{}) {
 	entry := x.(*bookEntry)
 
-	if el, ok := h.m[entry.Price]; ok {
+	if el, ok := hm.m[entry.Price]; ok {
 		el.Size = entry.Size
 		return
 	}
 
-	h.m[entry.Price] = entry
-	*h = append(*h, entry)
+	hm.m[entry.Price] = entry
+	hm.h = append(hm.h, entry)
 }
 
 // todo popping also needs to remove
 func (h *heapMap) Pop() interface{} {
-	for e := popImpl(); ; {
+	debug("pop")
+	for e := h.popImpl(); ; {
+		debug(e)
 		if e.Size == 0 {
 			return e
 		}
 	}
 }
 
-func (h *heapMap) popImpl() *bookEntry {
-	old := *h
+func (hm *heapMap) popImpl() *bookEntry {
+	debug("popimpl")
+	old := hm.h
 	n := len(old)
 	x := old[n-1]
-	*h = old[0 : n-1]
+	hm.h = old[0 : n-1]
 	return x
 }
