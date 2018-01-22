@@ -15,57 +15,49 @@ buy  5.10
 buy  5.00
 */
 type Book struct {
-	askHeap *bookEntryHeap
-	askMap  map[Money]*bookEntry
-
-	bidHeap *bookEntryHeap
-	bidMap  map[Money]*bookEntry
+	asks *heapMap
+	bids *heapMap
 }
 
 func NewBook() (*Book, error) {
-	book := &Book{
-		askHeap: &bookEntryHeap{},
-		askMap:  make(map[Money]*bookEntry),
-		bidHeap: &bookEntryHeap{},
-		bidMap:  make(map[Money]*bookEntry),
+	return &Book{
+		asks: newHeapMap(),
+		bids: newHeapMap(),
+	}, nil
+}
+
+func newHeapMap() *heapMap {
+	hm := &heapMap{
+		h: make([]*bookEntry, 0, 100),
+		m: make(map[Money]*bookEntry, 100),
 	}
-	heap.Init(book.askHeap)
-	heap.Init(book.bidHeap)
-	return book, nil
+	heap.Init(hm)
+	return hm
 }
 
 // removals can only happen when popping or peeking
 func (b *Book) update(e *bookEntry) {
-	var m map[Money]*bookEntry
-	var h *bookEntryHeap
-
+	var hm *heapMap
 	if e.Side == Buy {
-		m = b.bidMap
-		h = b.bidHeap
+		hm = b.bids
 	} else {
-		m = b.askMap
-		h = b.askHeap
+		hm = b.asks
 	}
-
-	if existing, ok := m[e.Price]; ok {
-		existing.Size = e.Size
-		return
-	}
-
-	m[e.Price] = e
-	h.Push(e)
+	hm.Push(e)
 }
 
+// TODO needs fixing
 func (b *Book) Spread() (Money, error) {
-	ask, ok := b.askHeap.Peek()
-	if !ok {
-		return Money{}, fmt.Errorf("todo")
-	}
-	bid, ok := b.bidHeap.Peek()
-	if !ok {
-		return Money{}, fmt.Errorf("todo")
-	}
-	return ask.Price.Minus(bid.Price), nil
+	// ask, ok := b.askHeap.Peek()
+	// if !ok {
+	// 	return Money{}, fmt.Errorf("todo")
+	// }
+	// bid, ok := b.bidHeap.Peek()
+	// if !ok {
+	// 	return Money{}, fmt.Errorf("todo")
+	// }
+	// return ask.Price.Minus(bid.Price), nil
+	return Money{}, nil
 }
 
 type bookEntry struct {
@@ -83,28 +75,48 @@ func (e bookEntry) priority() int64 {
 	return -e.Price.Int64()
 }
 
-type bookEntryHeap []*bookEntry
+type heapMap struct {
+	h []*bookEntry
+	m map[Money]*bookEntry
+}
 
-func (h bookEntryHeap) Len() int           { return len(h) }
-func (h bookEntryHeap) Less(i, j int) bool { return h[i].priority() < h[j].priority() }
-func (h bookEntryHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (hm heapMap) Len() int           { return len(hm.h) }
+func (hm heapMap) Less(i, j int) bool { return hm.h[i].priority() < hm.h[j].priority() }
+func (hm heapMap) Swap(i, j int)      { hm.h[i], hm.h[j] = hm.h[j], hm.h[i] }
 
-func (h *bookEntryHeap) Peek() (*bookEntry, bool) {
-	for h.Len() > 0 {
-		if (*h)[0].Size > 0 {
+func (hm *heapMap) Peek() (*bookEntry, bool) {
+	for hm.Len() > 0 {
+		if hm.h[0].Size == 0 {
+			hm.Pop()
+		} else {
 			return (*h)[0], true
 		}
-		h.Pop()
 	}
 	return nil, false
 }
 
-func (h *bookEntryHeap) Push(x interface{}) {
+func (h *heapMap) Push(x interface{}) {
 	entry := x.(*bookEntry)
+
+	if el, ok := h.m[entry.Price]; ok {
+		el.Size = entry.Size
+		return
+	}
+
+	h.m[entry.Price] = entry
 	*h = append(*h, entry)
 }
 
-func (h *bookEntryHeap) Pop() interface{} {
+// todo popping also needs to remove
+func (h *heapMap) Pop() interface{} {
+	for e := popImpl(); ; {
+		if e.Size == 0 {
+			return e
+		}
+	}
+}
+
+func (h *heapMap) popImpl() *bookEntry {
 	old := *h
 	n := len(old)
 	x := old[n-1]
