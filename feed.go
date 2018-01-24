@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +17,25 @@ const gdaxFeedURL = "wss://ws-feed.gdax.com"
 
 type Feed struct {
 	conn *websocket.Conn
+	auth AuthInfo
+}
+
+type AuthInfo struct {
+	Key        string
+	Passphrase string
+	Secret     string
+}
+
+func (a AuthInfo) signature() (time.Time, string) {
+	ts := time.Now()
+	what := []byte(strconv.FormatInt(ts.Unix(), 10) + "GET" + "/users/self/verify")
+	secret, err := base64.StdEncoding.DecodeString(a.Secret)
+	if err != nil {
+		panic(err)
+	}
+	h := hmac.New(sha256.New, secret)
+	h.Write(what)
+	return ts, base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 type Message interface {
@@ -39,13 +61,25 @@ func (f *Feed) Messages() (<-chan Message, error) {
 	return ch, nil
 }
 
-func NewFeed() (*Feed, error) {
+type FeedOption func(f *Feed)
+
+func WithAuth(info AuthInfo) FeedOption {
+	return func(f *Feed) {
+		f.auth = info
+	}
+}
+
+func NewFeed(opts ...FeedOption) (*Feed, error) {
 	c, _, err := websocket.DefaultDialer.Dial(gdaxFeedURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing feed: %v", err)
 	}
 
 	feed := &Feed{conn: c}
+	for _, o := range opts {
+		o(feed)
+	}
+
 	if err := feed.Subscribe([]ProductID{BchUsd}); err != nil {
 		return nil, err
 	}
@@ -56,17 +90,30 @@ func NewFeed() (*Feed, error) {
 type channelSpec interface{}
 
 func (f *Feed) Subscribe(productIDs []ProductID) error {
+
+	ts, sig := f.auth.signature()
+
 	payload, err := json.Marshal(struct {
 		Type       string        `json:"type"`
 		ProductIDs []ProductID   `json:"product_ids"`
 		Channels   []channelSpec `json:"channels"`
+		// Authenticated fields
+		Key        string `json:"key,omitempty"`
+		Passphrase string `json:"passphrase,omitempty"`
+		Timestamp  string `json:"timestamp,omitempty"`
+		Signature  string `json:"signature,omitempty"`
 	}{
 		Type:       "subscribe",
 		ProductIDs: productIDs,
 		Channels: []channelSpec{
 			"heartbeat",
 			"level2",
+			"full",
 		},
+		Key:        f.auth.Key,
+		Passphrase: f.auth.Passphrase,
+		Timestamp:  strconv.FormatInt(ts.Unix(), 10),
+		Signature:  sig,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating subscribe payload: %v", err)
@@ -86,6 +133,7 @@ const (
 	Snapshot                  = "snapshot"
 	Heartbeat                 = "heartbeat"
 	Subscriptions             = "subscriptions"
+	Error                     = "error"
 )
 
 func messageType(bb []byte) (MessageType, error) {
@@ -110,6 +158,8 @@ func parseMessage(bb []byte) (Message, error) {
 		return parseHeartbeat(bb)
 	case Subscriptions:
 		return parseSubscriptions(bb)
+	case Error:
+		return nil, fmt.Errorf("received error: %v", string(bb))
 	default:
 		return nil, fmt.Errorf("unknown message type: %v", mt)
 	}

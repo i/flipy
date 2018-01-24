@@ -3,12 +3,24 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 )
+
+func authFromEnv() AuthInfo {
+	return AuthInfo{
+		Key:        os.Getenv("CB_KEY"),
+		Passphrase: os.Getenv("CB_PASSPHRASE"),
+		Secret:     os.Getenv("CB_SECRET"),
+	}
+}
 
 func main() {
 	log.Printf("getting feed")
 
-	feed, err := NewFeed()
+	auth := authFromEnv()
+	fmt.Println(auth)
+
+	feed, err := NewFeed(WithAuth(auth))
 	if err != nil {
 		log.Fatalf("error creating feed: %v", err)
 	}
