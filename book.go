@@ -38,14 +38,9 @@ func newHeapMap() *heapMap {
 func (b *Book) Dump() []*bookEntry {
 	var ret []*bookEntry
 
-	for {
-		fmt.Println("ok...")
-		if _, ok := b.asks.peek(); !ok {
-			break
-		}
+	for b.asks.Len() > 0 {
 		ret = append(ret, b.asks.Pop().(*bookEntry))
 	}
-
 	return ret
 }
 
@@ -68,15 +63,18 @@ func (b *Book) update(e *bookEntry) {
 func (b *Book) Spread() (Money, error) {
 	ask, ok := b.asks.peek()
 	if !ok {
-		return Money{}, fmt.Errorf("todo")
+		return Money{}, fmt.Errorf("can't calculate spread without any asks")
 	}
+
 	bid, ok := b.bids.peek()
 	if !ok {
-		return Money{}, fmt.Errorf("todo")
+		return Money{}, fmt.Errorf("can't calculate spread without any bids")
 	}
-	return ask.Price.Minus(bid.Price), nil
 
-	return Money{}, nil
+	fmt.Printf("spread ask: %v\n", ask.Price)
+	fmt.Printf("spread bid: %v\n", bid.Price)
+
+	return ask.Price.Minus(bid.Price), nil
 }
 
 type bookEntry struct {
@@ -89,11 +87,12 @@ type bookEntry struct {
 // high buys > low buys
 func (e bookEntry) priority() int64 {
 	if e.Side == Sell {
-		return e.Price.Int64()
+		return -e.Price.Int64()
 	}
-	return -e.Price.Int64()
+	return e.Price.Int64()
 }
 
+// heapMap is a min-heap
 type heapMap struct {
 	h []*bookEntry
 	m map[Money]*bookEntry
@@ -101,15 +100,15 @@ type heapMap struct {
 
 func (hm heapMap) Len() int           { return len(hm.h) }
 func (hm heapMap) Less(i, j int) bool { return hm.h[i].priority() < hm.h[j].priority() }
-func (hm heapMap) Swap(i, j int)      { hm.h[i], hm.h[j] = hm.h[j], hm.h[i] }
+func (hm *heapMap) Swap(i, j int)     { hm.h[i], hm.h[j] = hm.h[j], hm.h[i] }
 
 func (hm *heapMap) peek() (*bookEntry, bool) {
-	debug("peeking")
 	for hm.Len() > 0 {
-		if hm.h[0].Size == 0 {
+		e := hm.h[0]
+		if e.Size == 0 {
 			hm.Pop()
 		} else {
-			return (hm.h)[0], true
+			return e, true
 		}
 	}
 	return nil, false
@@ -128,18 +127,17 @@ func (hm *heapMap) Push(x interface{}) {
 }
 
 // todo popping also needs to remove
-func (h *heapMap) Pop() interface{} {
-	debug("pop")
-	for e := h.popImpl(); ; {
-		debug(e)
-		if e.Size == 0 {
+func (hm *heapMap) Pop() interface{} {
+	for hm.Len() > 0 {
+		e := hm.popImpl()
+		if e.Size != 0 {
 			return e
 		}
 	}
+	return nil
 }
 
 func (hm *heapMap) popImpl() *bookEntry {
-	debug("popimpl")
 	old := hm.h
 	n := len(old)
 	x := old[n-1]
