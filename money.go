@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 )
@@ -31,7 +32,16 @@ func MoneyFromString(s string) (Money, error) {
 }
 
 func (m Money) String() string {
-	return fmt.Sprintf("%d.%02d", m.cents/100, m.cents%100)
+	sign := ""
+	if m.cents < 0 {
+		sign = "-"
+	}
+
+	return fmt.Sprintf(
+		"%s%d.%02d",
+		sign,
+		int64(math.Abs(float64(m.cents/100))),
+		int64(math.Abs(float64(m.cents%100))))
 }
 
 func (m Money) Int64() int64 {
@@ -40,6 +50,14 @@ func (m Money) Int64() int64 {
 
 func (m Money) Plus(that Money) Money {
 	return Money{m.cents + that.cents}
+}
+
+func (m Money) LT(that Money) bool {
+	return m.cents < that.cents
+}
+
+func (m Money) GT(that Money) bool {
+	return m.cents > that.cents
 }
 
 func (m Money) Minus(that Money) Money {

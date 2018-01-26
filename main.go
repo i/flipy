@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 )
 
@@ -14,11 +16,16 @@ func authFromEnv() AuthInfo {
 	}
 }
 
+func launchPprof() {
+	go http.ListenAndServe(":3000", nil)
+}
+
 func main() {
 	log.Printf("getting feed")
 
+	launchPprof()
+
 	auth := authFromEnv()
-	fmt.Println(auth)
 
 	feed, err := NewFeed(WithAuth(auth))
 	if err != nil {
@@ -35,7 +42,23 @@ func main() {
 		log.Fatalf("error creating book: %v", err)
 	}
 
-	var i int
+	client, err := NewGdaxClient(
+		WithBaseURL("https://api.gdax.com"),
+		//WithBaseURL("https://api-public.gdax.com"),
+		WithAuthInfo(auth),
+	)
+	if err != nil {
+		log.Fatalf("error creating gdax http client: %v", err)
+	}
+
+	_ = client
+	//orderID, err := client.buy(BchUsd, NewMoney(140, 0), 0.01)
+	//if err != nil {
+	//	log.Fatal(err)
+	//}
+	//fmt.Println("orderID:", orderID)
+	//return
+
 	for m := range ch {
 		switch msg := m.(type) {
 		case SnapshotMessage:
@@ -53,14 +76,12 @@ func main() {
 				book.update(bid)
 			}
 		}
-		spread, _ := book.Spread()
+		spread, err := book.Spread()
+		if err != nil {
+			log.Fatal(err)
+		}
 		fmt.Println("spread:", spread)
 		fmt.Println("size:", book.Size())
-
-		i++
-		if i > 25 {
-			//break
-		}
 	}
 
 	b := book.Dump()
@@ -103,10 +124,21 @@ const (
 	Sell      = "sell"
 )
 
-var debugEnabled = true
+var (
+	debugEnabled = false
+	warnEnabled  = false
+)
 
 func debug(s string, m ...interface{}) {
 	if debugEnabled {
+		log.Print("[debug] ")
+		log.Printf(s, m...)
+	}
+}
+
+func warn(s string, m ...interface{}) {
+	if warnEnabled {
+		log.Print("[warn] ")
 		log.Printf(s, m...)
 	}
 }

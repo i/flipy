@@ -1,9 +1,6 @@
 package main
 
 import (
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -18,24 +15,6 @@ const gdaxFeedURL = "wss://ws-feed.gdax.com"
 type Feed struct {
 	conn *websocket.Conn
 	auth AuthInfo
-}
-
-type AuthInfo struct {
-	Key        string
-	Passphrase string
-	Secret     string
-}
-
-func (a AuthInfo) signature() (time.Time, string) {
-	ts := time.Now()
-	what := []byte(strconv.FormatInt(ts.Unix(), 10) + "GET" + "/users/self/verify")
-	secret, err := base64.StdEncoding.DecodeString(a.Secret)
-	if err != nil {
-		panic(err)
-	}
-	h := hmac.New(sha256.New, secret)
-	h.Write(what)
-	return ts, base64.StdEncoding.EncodeToString(h.Sum(nil))
 }
 
 type Message interface {
@@ -90,8 +69,7 @@ func NewFeed(opts ...FeedOption) (*Feed, error) {
 type channelSpec interface{}
 
 func (f *Feed) Subscribe(productIDs []ProductID) error {
-
-	ts, sig := f.auth.signature()
+	ts, sig := f.auth.signature("GET", "/users/self/verify", "")
 
 	payload, err := json.Marshal(struct {
 		Type       string        `json:"type"`
@@ -108,7 +86,7 @@ func (f *Feed) Subscribe(productIDs []ProductID) error {
 		Channels: []channelSpec{
 			"heartbeat",
 			"level2",
-			"full",
+			//			"full",
 		},
 		Key:        f.auth.Key,
 		Passphrase: f.auth.Passphrase,
@@ -255,6 +233,8 @@ func parseSnapshotBookEntry(side Side, data []string) (*bookEntry, error) {
 	}, nil
 }
 
+var lastL2 time.Time
+
 func parseL2Update(bb []byte) (L2UpdateMessage, error) {
 	p := new(struct {
 		Type      string    `json:"type"`
@@ -266,10 +246,16 @@ func parseL2Update(bb []byte) (L2UpdateMessage, error) {
 		return L2UpdateMessage{}, err
 	}
 
+	fmt.Println(p.Time)
+	if p.Time.Before(lastL2) {
+		panic("out of order")
+	}
+	lastL2 = p.Time
+
 	msg := L2UpdateMessage{
 		ProductID: p.ProductID,
-		Bids:      make([]*bookEntry, 0, 1),
-		Asks:      make([]*bookEntry, 0, 1),
+		Bids:      make([]*bookEntry, 0, 1024),
+		Asks:      make([]*bookEntry, 0, 1024),
 	}
 
 	for _, c := range p.Changes {
