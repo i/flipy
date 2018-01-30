@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"strconv"
@@ -12,7 +13,7 @@ type Money struct {
 }
 
 func NewMoney(dollars, cents int64) Money {
-	return Money{dollars * 100}
+	return Money{dollars*100 + cents}
 }
 func MoneyFromString(s string) (Money, error) {
 	parts := strings.Split(s, ".")
@@ -67,6 +68,13 @@ func (m Money) Minus(that Money) Money {
 func (m Money) MarshalJSON() ([]byte, error) {
 	return []byte(m.String()), nil
 }
+
 func (m *Money) UnmarshalJSON(b []byte) error {
-	return nil
+	var s string
+	err := json.Unmarshal(b, &s)
+	if err != nil {
+		return err
+	}
+	*m, err = MoneyFromString(s)
+	return err
 }

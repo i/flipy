@@ -85,8 +85,8 @@ func (f *Feed) Subscribe(productIDs []ProductID) error {
 		ProductIDs: productIDs,
 		Channels: []channelSpec{
 			"heartbeat",
-			"level2",
-			//			"full",
+			"ticker",
+			"user",
 		},
 		Key:        f.auth.Key,
 		Passphrase: f.auth.Passphrase,
@@ -112,6 +112,11 @@ const (
 	Heartbeat                 = "heartbeat"
 	Subscriptions             = "subscriptions"
 	Error                     = "error"
+	Ticker                    = "ticker"
+	Received                  = "received"
+	Open                      = "open"
+	Done                      = "done"
+	Match                     = "match"
 )
 
 func messageType(bb []byte) (MessageType, error) {
@@ -136,10 +141,20 @@ func parseMessage(bb []byte) (Message, error) {
 		return parseHeartbeat(bb)
 	case Subscriptions:
 		return parseSubscriptions(bb)
+	case Ticker:
+		return parseTicker(bb)
+	case Received:
+		return nil, nil
+	case Open:
+		return nil, nil
+	case Match:
+		return parseMatch(bb)
+	case Done:
+		return parseDone(bb)
 	case Error:
 		return nil, fmt.Errorf("received error: %v", string(bb))
 	default:
-		return nil, fmt.Errorf("unknown message type: %v", mt)
+		return nil, fmt.Errorf("unknown message type: %v\n%s", mt, string(bb))
 	}
 }
 
@@ -295,6 +310,119 @@ func parseL2BookEntry(data []string) (*bookEntry, error) {
 		Price: price,
 		Size:  size,
 	}, nil
+}
+
+type TickerMessage struct {
+	Message
+
+	Seq       int
+	ProductID ProductID
+	BestBid   Money
+	BestAsk   Money
+	Spread    Money
+}
+
+type CancelMessage struct {
+	Message
+
+	OrderID OrderID
+}
+
+type FilledMessage struct {
+	Message
+
+	OrderID OrderID
+	Side    Side
+}
+
+type MatchMessage struct {
+	Message
+
+	Side    Side
+	OrderID OrderID
+	Size    float64
+}
+
+func parseTicker(bb []byte) (Message, error) {
+	p := new(struct {
+		Type      MessageType `json:"type"`
+		Sequence  int         `json:"sequence"`
+		ProductID ProductID   `json:"product_id"`
+		Price     string      `json:"price"`
+		Open24H   string      `json:"open_24h"`
+		Volume24H string      `json:"volume_24h"`
+		Low24H    string      `json:"low_24h"`
+		High24H   string      `json:"high_24h"`
+		Volume30D string      `json:"volume_30d"`
+		BestBid   Money       `json:"best_bid"`
+		BestAsk   Money       `json:"best_ask"`
+	})
+	if err := json.Unmarshal(bb, p); err != nil {
+		return nil, err
+	}
+	return TickerMessage{
+		ProductID: p.ProductID,
+		BestBid:   p.BestBid,
+		BestAsk:   p.BestAsk,
+		Spread:    p.BestAsk.Minus(p.BestBid),
+	}, nil
+}
+
+func parseMatch(bb []byte) (Message, error) {
+	p := new(struct {
+		Type         string  `json:"type"`
+		Side         Side    `json:"side"`
+		MakerOrderID OrderID `json:"maker_order_id"`
+		Size         string  `json:"size"`
+		// unused below this line
+		TradeID        int       `json:"trade_id"`
+		TakerOrderID   string    `json:"taker_order_id"`
+		Price          string    `json:"price"`
+		ProductID      string    `json:"product_id"`
+		MakerUserID    string    `json:"maker_user_id"`
+		UserID         string    `json:"user_id"`
+		MakerProfileID string    `json:"maker_profile_id"`
+		ProfileID      string    `json:"profile_id"`
+		Sequence       int       `json:"sequence"`
+		Time           time.Time `json:"time"`
+	})
+
+	if err := json.Unmarshal(bb, p); err != nil {
+		return nil, err
+	}
+
+	return MatchMessage{
+		Side:    p.Side,
+		OrderID: p.MakerOrderID,
+	}, nil
+}
+
+func parseDone(bb []byte) (Message, error) {
+	p := new(struct {
+		Type          string    `json:"type"`
+		Side          Side      `json:"side"`
+		OrderID       OrderID   `json:"order_id"`
+		Reason        string    `json:"reason"`
+		ProductID     string    `json:"product_id"`
+		Price         string    `json:"price"`
+		RemainingSize string    `json:"remaining_size"`
+		Sequence      int       `json:"sequence"`
+		UserID        string    `json:"user_id"`
+		ProfileID     string    `json:"profile_id"`
+		Time          time.Time `json:"time"`
+	})
+	if err := json.Unmarshal(bb, p); err != nil {
+		return nil, err
+	}
+
+	switch p.Reason {
+	case "canceled":
+		return CancelMessage{OrderID: p.OrderID}, nil
+	case "filled":
+		return FilledMessage{OrderID: p.OrderID, Side: p.Side}, nil
+	default:
+		return nil, fmt.Errorf("unknown reason: %v", p.Reason)
+	}
 }
 
 func parseHeartbeat(bb []byte) (HeartbeatMessage, error) {

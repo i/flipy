@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 )
 
@@ -36,20 +37,21 @@ func NewGdaxClient(opts ...ClientOption) (*GdaxClient, error) {
 	return client, nil
 }
 
-func (gdx *GdaxClient) buy(productID ProductID, price Money, size float64) (*orderResponse, error) {
+func (gdx *GdaxClient) placeOrder(productID ProductID, side Side, price Money, size float64) (OrderID, error) {
 	body := bytes.NewBuffer(nil)
 	if err := json.NewEncoder(body).Encode(orderRequest{
 		Size:      fmt.Sprintf("%f", size),
 		Price:     price,
-		Side:      "buy",
+		Side:      side,
 		ProductID: productID,
+		PostOnly:  true,
 	}); err != nil {
-		return nil, err
+		return "", err
 	}
 
 	req, err := http.NewRequest("POST", gdx.baseURL+"/orders", body)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -59,21 +61,67 @@ func (gdx *GdaxClient) buy(productID ProductID, price Money, size float64) (*ord
 
 	resp, err := gdx.client.Do(req)
 	if err != nil {
-		return nil, err
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return "", fmt.Errorf("bad code: %d\n%s\n", resp.StatusCode, string(b))
 	}
 
-	bb, err := ioutil.ReadAll(resp.Body)
+	p := new(struct {
+		OrderID `json:"id"`
+	})
+	if err := json.NewDecoder(resp.Body).Decode(p); err != nil {
+		return "", err
+	}
+
+	return p.OrderID, nil
+}
+
+func (gdx *GdaxClient) Buy(productID ProductID, price Money, size float64) (OrderID, error) {
+	return gdx.placeOrder(productID, Buy, price, size)
+}
+
+func doit() int {
+	panic("")
+}
+
+func doit2() int {
+	log.Fatal("")
+	return 0
+}
+
+func (gdx *GdaxClient) Sell(productID ProductID, price Money, size float64) (OrderID, error) {
+	return gdx.placeOrder(productID, Sell, price, size)
+}
+
+func (gdx *GdaxClient) Cancel(orderID OrderID) error {
+	path := "/orders/" + string(orderID)
+	req, err := http.NewRequest("DELETE", gdx.baseURL+path, nil)
 	if err != nil {
-		return nil, err
-	}
-	fmt.Println(string(bb))
-
-	r := new(orderResponse)
-	if err := json.NewDecoder(resp.Body).Decode(r); err != nil {
-		return nil, err
+		return err
 	}
 
-	return r, nil
+	req.Header.Set("Content-Type", "application/json")
+	for k, v := range gdx.auth.Headers("DELETE", path, "") {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := gdx.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		b, _ := ioutil.ReadAll(resp.Body)
+		return fmt.Errorf("bad code: %d\n%s\n", resp.StatusCode, string(b))
+	}
+
+	return nil
+
 }
 
 type orderRequest struct {
@@ -81,23 +129,6 @@ type orderRequest struct {
 	Price     Money     `json:"price"`
 	Side      Side      `json:"side"`
 	ProductID ProductID `json:"product_id"`
+	PostOnly  bool      `json:"post_only"`
 	Stp       string    `json:"stp,omitempty"`
-}
-
-type orderResponse struct {
-	ID            OrderID `json:"id"`
-	Price         string  `json:"price"`
-	Size          string  `json:"size"`
-	ProductID     string  `json:"product_id"`
-	Side          string  `json:"side"`
-	Stp           string  `json:"stp"`
-	Type          string  `json:"type"`
-	TimeInForce   string  `json:"time_in_force"`
-	PostOnly      bool    `json:"post_only"`
-	CreatedAt     string  `json:"created_at"`
-	FillFees      string  `json:"fill_fees"`
-	FilledSize    string  `json:"filled_size"`
-	ExecutedValue string  `json:"executed_value"`
-	Status        string  `json:"status"`
-	Settled       bool    `json:"settled"`
 }
