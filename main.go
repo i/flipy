@@ -81,15 +81,12 @@ func main() {
 			lastTick = msg.Seq
 
 			for _, order := range bids {
-				if msg.BestBid.GT(order.buyAt) {
-					order.Cancel()
-				}
-				if msg.BestAsk.LT(order.sellAt) {
+				if msg.BestBid.GT(order.buyAt) || msg.BestAsk.LT(order.sellAt) {
 					order.Cancel()
 				}
 			}
 
-			if msg.Spread.GT(NewMoney(0, 50)) && len(bids) < 2 {
+			if msg.Spread.GT(NewMoney(0, 50)) && len(bids) < 10 {
 				fmt.Println("got a nice spread: ", msg.Spread)
 				info, err := flip(client, msg)
 				if err != nil {
@@ -126,7 +123,7 @@ func main() {
 	select {}
 }
 
-const orderSize = 0.01
+const orderSize = 0.00001
 
 type OrderInfo struct {
 	gdax *GdaxClient
